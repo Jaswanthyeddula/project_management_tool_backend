@@ -23,6 +23,7 @@ def create_app(env=None):
     _register_error_handlers(app)
 
     @app.get("/health")
+    @limiter.exempt
     def health():
         return {"status": "ok"}, 200
 
