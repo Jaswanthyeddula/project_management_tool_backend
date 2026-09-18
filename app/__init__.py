@@ -64,7 +64,7 @@ def _register_blueprints(app):
     from app.blueprints.tasklabels.routes import tasklabel_bp
     app.register_blueprint(tasklabel_bp, url_prefix="/api")
     from app.blueprints.notifi.routes import notification_bp
-    app.register_blueprint(notification_bp)
+    app.register_blueprint(notification_bp, url_prefix="/api/notifications")
     from app.blueprints.ai.routes import ai_task_bp
     app.register_blueprint(ai_task_bp, url_prefix="/api")
 
