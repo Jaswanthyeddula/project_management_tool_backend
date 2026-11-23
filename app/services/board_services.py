@@ -2,6 +2,7 @@ from app.extensions import db
 from app.models.board import Board
 from app.models.project import Project
 from app.models.project_member import ProjectMember
+from app.models.task import Task
 from datetime import datetime, timezone
 
 
@@ -50,6 +51,7 @@ def get_project_boards(user_id, project_id):
 
     return boards
 
+
 def get_board_by_id(user_id, board_id):
     board = Board.query.filter_by(id=board_id, deleted_at=None).first()
     if not board:
@@ -57,6 +59,8 @@ def get_board_by_id(user_id, board_id):
 
     _check_project_membership(user_id, board.project_id)
     return board
+
+
 def update_board(user_id, board_id, name=None, description=None):
     board = Board.query.filter_by(id=board_id, deleted_at=None).first()
     if not board:
@@ -74,6 +78,8 @@ def update_board(user_id, board_id, name=None, description=None):
         board.description = description
     db.session.commit()
     return board
+
+
 def delete_board(user_id, board_id):
     board = Board.query.filter_by(id=board_id, deleted_at=None).first()
     if not board:
@@ -84,6 +90,8 @@ def delete_board(user_id, board_id):
     board.deleted_at = datetime.now(timezone.utc)
     db.session.commit()
     return True
+
+
 def restore_board(user_id, board_id):
     board = Board.query.filter_by(id=board_id).first()
     if not board:
@@ -97,10 +105,14 @@ def restore_board(user_id, board_id):
     board.deleted_at = None
     db.session.commit()
     return board
+
+
 def get_deleted_boards(user_id, project_id):
     _check_project_membership(user_id, project_id)
     boards = Board.query.filter_by(project_id=project_id).filter(Board.deleted_at.isnot(None)).all()
     return boards
+
+
 def reorder_board(user_id, board_id, new_order):
     board = Board.query.filter_by(id=board_id, deleted_at=None).first()
     if not board:
@@ -117,6 +129,8 @@ def reorder_board(user_id, board_id, new_order):
     board.position = new_order
     db.session.commit()
     return board
+
+
 def duplicate_board(user_id, board_id):
     board = Board.query.filter_by(id=board_id, deleted_at=None).first()
     if not board:
@@ -131,5 +145,22 @@ def duplicate_board(user_id, board_id):
         position=board.position + 1
     )
     db.session.add(new_board)
+    db.session.flush()
+
+    # Duplicate active tasks from original board into new board
+    for original_task in board.tasks:
+        if original_task.deleted_at is None:
+            new_task = Task(
+                board_id=new_board.id,
+                title=original_task.title,
+                description=original_task.description,
+                status=original_task.status,
+                priority=original_task.priority,
+                position=original_task.position,
+                due_date=original_task.due_date,
+                created_by=user_id
+            )
+            db.session.add(new_task)
+
     db.session.commit()
     return new_board

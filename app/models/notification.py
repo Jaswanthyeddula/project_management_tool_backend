@@ -10,7 +10,8 @@ class Notification(db.Model):
     user_id = db.Column(
         db.Integer,
         db.ForeignKey("users.id"),
-        nullable=False
+        nullable=False,
+        index=True
     )
 
     type = db.Column(db.String(50), nullable=False)
@@ -26,7 +27,8 @@ class Notification(db.Model):
     is_read = db.Column(
         db.Boolean,
         nullable=False,
-        default=False
+        default=False,
+        index=True
     )
 
     created_at = db.Column(

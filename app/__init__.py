@@ -18,6 +18,10 @@ def create_app(env=None):
     app = Flask(__name__)
     app.config.from_object(config_by_name[env]())
 
+    # Fix reverse proxy headers so get_remote_address sees real client IP on Render/proxies
+    from werkzeug.middleware.proxy_fix import ProxyFix
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+
     _init_extensions(app)
     _register_blueprints(app)
     _register_error_handlers(app)
@@ -35,7 +39,16 @@ def _init_extensions(app):
     migrate.init_app(app, db)
     jwt.init_app(app)
     bcrypt.init_app(app)
-    cors.init_app(app)
+
+    allowed_origins = os.environ.get(
+        "ALLOWED_ORIGINS",
+        "https://projectmanagementtoolfrontend2.vercel.app,http://localhost:5173,http://localhost:3000"
+    ).split(",")
+    cors.init_app(
+        app,
+        resources={r"/*": {"origins": [o.strip() for o in allowed_origins]}},
+        supports_credentials=True,
+    )
     limiter.init_app(app)
 
     from app import models  # noqa: F401

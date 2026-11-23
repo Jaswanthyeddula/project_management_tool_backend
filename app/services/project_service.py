@@ -283,10 +283,16 @@ def update_member_role(project_id, requester_id, targeted_id, new_role):
     if not target_member:
         raise ProjectError("User is not a member of this project.", 404)
 
+    # Admins cannot change other admins or owners
+    if member.role == "admin" and target_member.role in ("admin", "owner"):
+        raise ProjectError("Admins cannot modify the role of another admin or owner.", 403)
+
     if target_member.role == "owner" and new_role != "owner":
+        if member.role != "owner":
+            raise ProjectError("Only owners can change the role of an owner.", 403)
         owner_count = ProjectMember.query.filter_by(project_id=project_id, role="owner").count()
-        if owner_count == 1:
-            raise ProjectError("Cannot change the role of the project owner.", 403)
+        if owner_count <= 1:
+            raise ProjectError("Cannot change the role of the only project owner.", 403)
 
     target_member.role = new_role
     db.session.commit()
@@ -297,17 +303,25 @@ def remove_member(project_id, requester_id, targeted_id):
     get_projects_by_id(requester_id, project_id)
 
     member = ProjectMember.query.filter_by(project_id=project_id, user_id=requester_id).first()
-    if member.role not in ("owner", "admin"):
+    is_self_removal = (requester_id == targeted_id)
+
+    if not is_self_removal and member.role not in ("owner", "admin"):
         raise ProjectError("You do not have permission to remove members from this project.", 403)
 
     target_member = ProjectMember.query.filter_by(project_id=project_id, user_id=targeted_id).first()
     if not target_member:
         raise ProjectError("User is not a member of this project.", 404)
 
+    # Admins cannot remove other admins or owners
+    if not is_self_removal and member.role == "admin" and target_member.role in ("admin", "owner"):
+        raise ProjectError("Admins cannot remove other admins or owners.", 403)
+
     if target_member.role == "owner":
         owner_count = ProjectMember.query.filter_by(project_id=project_id, role="owner").count()
-        if owner_count == 1:
-            raise ProjectError("Cannot remove the project owner.", 403)
+        if owner_count <= 1:
+            raise ProjectError("Cannot remove the only project owner.", 403)
+        if not is_self_removal and member.role != "owner":
+            raise ProjectError("Only project owners can remove another owner.", 403)
 
     db.session.delete(target_member)
     db.session.commit()

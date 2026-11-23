@@ -171,11 +171,11 @@ class ApiRouteAuditTests(unittest.TestCase):
 
         with self.app.app_context():
             notification_id = create_notification(owner_id, "task_assigned", "A task was assigned", task_id).id
-        self.call("GET", "/notifications", token)
-        self.call("GET", "/notifications?unread_only=true", token)
-        self.call("GET", "/notifications/unread-count", token)
-        self.call("PATCH", f"/notifications/{notification_id}/read", token)
-        self.call("PATCH", "/notifications/read-all", token)
+        self.call("GET", "/api/notifications", token)
+        self.call("GET", "/api/notifications?unread_only=true", token)
+        self.call("GET", "/api/notifications/unread-count", token)
+        self.call("PATCH", f"/api/notifications/{notification_id}/read", token)
+        self.call("PATCH", "/api/notifications/read-all", token)
 
         self.call("DELETE", f"/api/projects/{project_id}/members/{member_id}", token)
         self.call("DELETE", f"/api/projects/{project_id}", token)

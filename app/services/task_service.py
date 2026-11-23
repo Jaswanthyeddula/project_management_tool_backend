@@ -1,6 +1,7 @@
 import logging
 from typing import Optional, Union
 from datetime import date, datetime, timezone
+from sqlalchemy.orm import selectinload
 
 from app.extensions import db
 from app.models import Project, User
@@ -138,6 +139,7 @@ def get_board_tasks(user_id: int, board_id: int, status_filter: Optional[str] = 
 
     query = (
         Task.query
+        .options(selectinload(Task.ai_task_request))
         .filter_by(board_id=board_id, deleted_at=None)
     )
 
@@ -146,6 +148,16 @@ def get_board_tasks(user_id: int, board_id: int, status_filter: Optional[str] = 
 
     tasks = query.order_by(Task.position.asc()).all()
     return tasks
+
+
+def _get_task_and_member(user_id: int, task_id: int) -> tuple[Task, ProjectMember]:
+    """Helper to fetch a task and verify user access in a single unified check."""
+    task = Task.query.filter_by(id=task_id, deleted_at=None).first()
+    if not task:
+        logger.warning(f"Task {task_id} not found")
+        raise TaskError("Task is not Found", 404)
+    member = _check_board_access(user_id, task.board_id)
+    return task, member
 
 
 def get_task_by_id(user_id: int, task_id: int) -> Task:
@@ -162,11 +174,7 @@ def get_task_by_id(user_id: int, task_id: int) -> Task:
     Raises:
         TaskError: If task not found or user lacks access
     """
-    task = Task.query.filter_by(id=task_id, deleted_at=None).first()
-    if not task:
-        logger.warning(f"Task {task_id} not found")
-        raise TaskError("Task is not Found", 404)
-    _check_board_access(user_id, task.board_id)
+    task, _ = _get_task_and_member(user_id, task_id)
     return task
 
 
@@ -195,8 +203,7 @@ def update_task(
     Raises:
         TaskError: If user lacks permission or validation fails
     """
-    task = get_task_by_id(user_id, task_id)
-    member = _check_board_access(user_id, task.board_id)
+    task, member = _get_task_and_member(user_id, task_id)
 
     is_privileged = member.role in ("owner", "admin")
     is_assignee = task.assignee_id == user_id
@@ -252,8 +259,7 @@ def delete_task(user_id: int, task_id: int) -> bool:
     Raises:
         TaskError: If user lacks permission or task not found
     """
-    task = get_task_by_id(user_id, task_id)
-    member = _check_board_access(user_id, task.board_id)
+    task, member = _get_task_and_member(user_id, task_id)
     
     if member.role not in ("owner", "admin"):
         logger.warning(f"User {user_id} attempted to delete task {task_id} without permission")
@@ -329,8 +335,7 @@ def move_task(user_id: int, task_id: int, new_status: str, new_position: Union[i
     Raises:
         TaskError: If user lacks permission or validation fails
     """
-    task = get_task_by_id(user_id, task_id)
-    member = _check_board_access(user_id, task.board_id)
+    task, member = _get_task_and_member(user_id, task_id)
 
     if member.role == "viewer":
         logger.warning(f"Viewer {user_id} attempted to move task {task_id}")
@@ -377,8 +382,7 @@ def assign_task(user_id: int, task_id: int, assignee_id: Optional[int]) -> Task:
     Raises:
         TaskError: If user lacks permission or assignee not found
     """
-    task = get_task_by_id(user_id, task_id)
-    member = _check_board_access(user_id, task.board_id)
+    task, member = _get_task_and_member(user_id, task_id)
 
     if member.role not in ("owner", "admin"):
         logger.warning(f"User {user_id} attempted to assign task {task_id} without permission")
@@ -397,11 +401,25 @@ def assign_task(user_id: int, task_id: int, assignee_id: Optional[int]) -> Task:
             logger.warning(f"Attempted to assign task to non-member user {assignee_id}")
             raise TaskError("Assignee must be a member of this project.", 400)
 
+    old_assignee_id = task.assignee_id
     task.assignee_id = assignee_id
     
     try:
         db.session.commit()
         logger.info(f"Task {task_id} assigned by user {user_id}")
+
+        # Send notification to the newly assigned user (if not self-assigning)
+        if assignee_id and assignee_id != user_id and assignee_id != old_assignee_id:
+            try:
+                from app.services.notification_service import create_notification
+                create_notification(
+                    user_id=assignee_id,
+                    notification_type="task_assigned",
+                    message=f"You were assigned to task: '{task.title}'",
+                    related_task_id=task.id
+                )
+            except Exception as notify_err:
+                logger.warning(f"Failed to create notification for task assignment: {notify_err}")
     except Exception as e:
         db.session.rollback()
         logger.error(f"Failed to assign task {task_id}: {str(e)}", exc_info=True)

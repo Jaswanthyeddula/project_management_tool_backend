@@ -9,7 +9,7 @@ class ProjectMember(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     project_id = db.Column(db.Integer, db.ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     role = db.Column(db.Enum("owner", "admin", "member", "viewer", name="member_role"), default="member")
     joined_at = db.Column(UTCDateTime(), default=lambda: datetime.now(timezone.utc))
     invited_by = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="SET NULL"))

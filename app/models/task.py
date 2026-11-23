@@ -8,7 +8,7 @@ class Task(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
 
-    board_id = db.Column(db.Integer, db.ForeignKey("boards.id", ondelete="CASCADE"), nullable=False)
+    board_id = db.Column(db.Integer, db.ForeignKey("boards.id", ondelete="CASCADE"), nullable=False, index=True)
     assignee_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True, index=True)
     created_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
 

@@ -61,13 +61,15 @@ class ProductionConfig(Config):
     DEBUG = False
 
     def __init__(self):
-        if not os.environ.get("SECRET_KEY"):
+        secret_key = os.environ.get("SECRET_KEY", "")
+        jwt_secret_key = os.environ.get("JWT_SECRET_KEY", "")
+        if not secret_key or "change-me" in secret_key:
             raise RuntimeError(
-                "SECRET_KEY must be set via environment variable in production."
+                "SECRET_KEY must be securely set via environment variable in production (not default change-me)."
             )
-        if not os.environ.get("JWT_SECRET_KEY"):
+        if not jwt_secret_key or "change-me" in jwt_secret_key:
             raise RuntimeError(
-                "JWT_SECRET_KEY must be set via environment variable in production."
+                "JWT_SECRET_KEY must be securely set via environment variable in production (not default change-me)."
             )
 
 
